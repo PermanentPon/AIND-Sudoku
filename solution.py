@@ -1,23 +1,9 @@
-import collections
+import logging
+from utils import *
+
+logging.basicConfig(level=logging.ERROR)
 
 assignments = []
-rows = 'ABCDEFGHI'
-cols = '123456789'
-
-def cross(A, B):
-    return [s+t for s in A for t in B]
-
-boxes = cross(rows, cols)
-
-row_units = [cross(r, cols) for r in rows]
-column_units = [cross(rows, c) for c in cols]
-square_units = [cross(rs, cs) for rs in ('ABC', 'DEF', 'GHI') for cs in ('123', '456', '789')]
-diagonal1 = [x[0]+x[1] for x in zip(rows, cols)]
-diagonal2 = [x[0]+x[1] for x in zip(rows, cols[::-1])]
-unitlist = row_units + column_units + square_units + [diagonal1] + [diagonal2]
-units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
-peers = dict((s, set(sum(units[s], [])) - set([s])) for s in boxes)
-
 
 def assign_value(values, box, value):
     """
@@ -40,25 +26,33 @@ def naked_twins(values):
 
     # Find all instances of naked twins
     # Eliminate the naked twins as possibilities for their peers
-    #Go over every unit
+    # Go over every unit
     for unit in unitlist:
-        #Save values of a unit
+        # Save values of a unit
         unit_values = dict((x, values[x]) for x in unit)
-        #Find twins in values for a unit
-        twins = set([x for x in unit_values.values() if unit_values.values().count(x) > 1 and len(x) == 2])
-        #Go over every twin
+        # Find twins in values for a unit
+        seen = set()
+        uniq = []
+        twins = []
+        for x in unit_values.values():
+            if x not in seen:
+                uniq.append(x)
+                seen.add(x)
+            elif len(x) == 2:
+                twins.append(x)
+        # Go over every twin
         if len(twins) > 0:
             for twin in twins:
                 twin_peers = []
-                #Get all peers for a twin in a unit
+                # Get all peers for a twin in a unit
                 for key, value in unit_values.items():
                     if value != twin:
                         twin_peers.append(key)
-                #Go over all peer for a twin
+                # Go over all peer for a twin
                 for twin_peer in twin_peers:
-                    #Go over all(2) digits in a twin
+                    # Go over all(2) digits in a twin
                     for character in twin:
-                        #Delete digits from peer
+                        # Delete digits from peers
                         if len(values[twin_peer]) > 1:
                             assign_value(values, twin_peer, values[twin_peer].replace(character, ''))
     return values
@@ -92,12 +86,17 @@ def display(values):
     width = 1+max(len(values[s]) for s in boxes)
     line = '+'.join(['-'*(width*3)]*3)
     for r in rows:
-        print(''.join(values[r+c].center(width)+('|' if c in '36' else '')
+        logging.info(''.join(values[r+c].center(width)+('|' if c in '36' else '')
                       for c in cols))
-        if r in 'CF': print(line)
-    print
+        if r in 'CF': logging.info(line)
+    logging.info("")
 
 def eliminate(values):
+    """
+    Go through all the boxes, and whenever there is a box with a value, eliminate this value from the values of all its peers.
+    Input: A sudoku in dictionary form.
+    Output: The resulting sudoku in dictionary form.
+    """
     for key, value in values.items():
         if len(value) == 1:
             for peer in peers[key]:
@@ -105,6 +104,11 @@ def eliminate(values):
     return values
 
 def only_choice(values):
+    """
+    Go through all the units, and whenever there is a unit with a value that only fits in one box, assign the value to this box.
+    Input: A sudoku in dictionary form.
+    Output: The resulting sudoku in dictionary form.
+    """
     for unit in unitlist:
         for digit in '123456789':
             dplaces = [box for box in unit if digit in values[box]]
@@ -113,15 +117,31 @@ def only_choice(values):
     return values
 
 def reduce_puzzle(values):
+    """
+    Iterate eliminate() and only_choice(). If at some point, there is a box with no available values, return False.
+    If the sudoku is solved, return the sudoku.
+    If after an iteration of both functions, the sudoku remains the same, return the sudoku.
+    Input: A sudoku in dictionary form.
+    Output: The resulting sudoku in dictionary form.
+    """
     stalled = False
     while not stalled:
         # Check how many boxes have a determined value
         solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-
-        # Your code here: Use the Eliminate Strategy
+        # Use the Eliminate Strategy
+        logging.info("Before eliminate:")
+        display(values)
         values = eliminate(values)
-        # Your code here: Use the Only Choice Strategy
+        # Use the Only Choice Strategy
+        logging.info("Before the Only Choice:")
+        display(values)
         values = only_choice(values)
+        # Use the Naked Twins Strategy
+        logging.info("Before the Naked Twins:")
+        display(values)
+        values = naked_twins(values)
+        logging.info("After the Naked Twins:")
+        display(values)
         # Check how many boxes have a determined value, to compare
         solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
         # If no new values were added, stop the loop.
@@ -143,15 +163,15 @@ def search(values):
     # Choose one of the unfilled squares with the fewest possibilities
     min_value = 11
     min_box = ''
-    #print(values)
+    logging.debug(values)
     for key, value in values.items():
         if min_value > len(value) and len(value) > 1:
             min_value = len(value)
             min_box = key
-            #print(min_value, key)
+            logging.debug(min_value, key)
     # Now use recursion to solve each one of the resulting sudokus, and if one returns a value (not False), return that answer!
-    #print(min_box)
-    #print(values[min_box])
+    logging.debug(min_box)
+    logging.debug(values[min_box])
     for i in values[min_box]:
         new_sudoku = values.copy()
         new_sudoku[min_box] = i
@@ -175,7 +195,6 @@ def solve(grid):
 if __name__ == '__main__':
     diag_sudoku_grid = '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
     display(solve(diag_sudoku_grid))
-
     try:
         from visualize import visualize_assignments
         visualize_assignments(assignments)
@@ -183,4 +202,4 @@ if __name__ == '__main__':
     except SystemExit:
         pass
     except:
-        print('We could not visualize your board due to a pygame issue. Not a problem! It is not a requirement.')
+        logging.warning('We could not visualize your board due to a pygame issue. Not a problem! It is not a requirement.')
